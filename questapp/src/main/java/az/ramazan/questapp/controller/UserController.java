@@ -1,55 +1,70 @@
 package az.ramazan.questapp.controller;
 
+
 import az.ramazan.questapp.entities.User;
-import az.ramazan.questapp.repository.UserRepository;
+import az.ramazan.questapp.exceptions.UserNotFoundException;
+import az.ramazan.questapp.responses.UserResponse;
+import az.ramazan.questapp.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
+
 
 @RestController
 @RequestMapping("/users")
 public class UserController {
-    private final UserRepository userRepository;
+    private final UserService userService;
 
-    public UserController(UserRepository userRepository) {
-        this.userRepository = userRepository;
+    @Autowired
+    public UserController(UserService userService) {
+        this.userService = userService;
     }
 
     @GetMapping
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
+    public List<UserResponse> getAllUsers() {
+        return userService.getAllUsers().stream().map(u -> new UserResponse(u)).toList();
     }
 
     @PostMapping
-    public User createUser(@RequestBody User newUser) {
-        return userRepository.save(newUser);
+    public ResponseEntity<Void> createUser(@RequestBody User newUser) {
+        User user = userService.saveOneUser(newUser);
+        if (user != null)
+            return new ResponseEntity<>(HttpStatus.CREATED);
+        return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @GetMapping("/{userId}")
-    public User getOneUser(@PathVariable Long userId) {
-        return userRepository.findById(userId).orElse(null);
+    public UserResponse getOneUser(@PathVariable Long userId) {
+        User user = userService.getOneUserById(userId);
+        if (user == null) {
+            throw new UserNotFoundException(userId + " idli user tapilmadi");
+        }
+        return new UserResponse(user);
     }
 
-    @PutMapping("/{userId}")
-    public User updateOneUser(@PathVariable Long userId, @RequestBody User updatedUser) {
-        Optional<User> existingUser = userRepository.findById(userId);
-        if (existingUser.isPresent()) {
-            User foundUser = existingUser.get();
-            foundUser.setUsername(updatedUser.getUsername());
-            foundUser.setPassword(updatedUser.getPassword());
-            userRepository.save(foundUser);
-            return foundUser;
-        } else {
-            return null;
-        }
+    @PutMapping
+    public ResponseEntity<Void> updateOneUser(@PathVariable Long userId, @RequestBody User newUser) {
+        User user = userService.updateOneUser(userId, newUser);
+        if (user != null)
+            return new ResponseEntity<>(HttpStatus.OK);
+        return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @DeleteMapping("/{userId}")
     public void deleteOneUser(@PathVariable Long userId) {
-        userRepository.deleteById(userId);
-
+        userService.deleteById(userId);
+    }
+    @GetMapping("/activity/{userId}")
+    public List<Object> getUserActivity(@PathVariable Long userId) {
+        return userService.getUserActivity(userId);
     }
 
+    @ExceptionHandler(UserNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    private void handleUserNotFound() {
 
+    }
 }
